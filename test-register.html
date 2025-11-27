@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Registration - MKcode</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }
+        h1 { color: #22c55e; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        input { width: 100%; padding: 10px; margin: 5px 0; box-sizing: border-box; }
+        button { background: #22c55e; color: white; padding: 12px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #16a34a; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        .server-check { margin: 20px 0; padding: 15px; background: #f8f9fa; border-left: 4px solid #22c55e; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Registration - MKcode</h1>
+    
+    <div id="serverStatus" class="server-check">
+        <strong>Server Status:</strong> <span id="statusText">Checking...</span>
+    </div>
+
+    <form id="testForm">
+        <label><strong>Name:</strong></label>
+        <input type="text" id="name" placeholder="Your Name" value="Test User" required />
+        
+        <label><strong>Email:</strong></label>
+        <input type="email" id="email" placeholder="your@email.com" value="test@example.com" required />
+        
+        <label><strong>Password:</strong></label>
+        <input type="password" id="password" placeholder="Password (min 6 chars)" value="test123456" required />
+        
+        <br><br>
+        <button type="submit" id="submitBtn">🚀 Register User</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';
+
+        // Check server status on load
+        async function checkServer() {
+            const statusText = document.getElementById('statusText');
+            const serverStatus = document.getElementById('serverStatus');
+            
+            try {
+                const response = await fetch(`${API_URL}/api/health`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    statusText.innerHTML = '✅ Server is running on port 5000';
+                    serverStatus.style.borderLeftColor = '#22c55e';
+                } else {
+                    statusText.innerHTML = '⚠️ Server responded but with an error';
+                    serverStatus.style.borderLeftColor = '#fbbf24';
+                }
+            } catch (error) {
+                statusText.innerHTML = '❌ Cannot connect to server. Make sure server.js is running!';
+                serverStatus.style.borderLeftColor = '#ef4444';
+            }
+        }
+
+        // Test registration
+        document.getElementById('testForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const resultDiv = document.getElementById('result');
+            
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Registering...';
+            resultDiv.innerHTML = '<div class="status info">⏳ Sending registration request...</div>';
+            
+            const data = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value
+            };
+
+            console.log('Sending data:', data);
+
+            try {
+                const response = await fetch(`${API_URL}/api/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                console.log('Response status:', response.status);
+                const result = await response.json();
+                console.log('Response data:', result);
+
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="status success">
+                            <h3>✅ Registration Successful!</h3>
+                            <p><strong>Message:</strong> ${result.message || 'User registered'}</p>
+                            <p><strong>Token:</strong> ${result.token ? 'Received' : 'Not received'}</p>
+                            <p><strong>User ID:</strong> ${result.user?.id || 'N/A'}</p>
+                            <p><strong>Email:</strong> ${result.user?.email || data.email}</p>
+                        </div>
+                        <details>
+                            <summary>Full Response</summary>
+                            <pre>${JSON.stringify(result, null, 2)}</pre>
+                        </details>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="status error">
+                            <h3>❌ Registration Failed</h3>
+                            <p><strong>Status:</strong> ${response.status}</p>
+                            <p><strong>Message:</strong> ${result.message || 'Unknown error'}</p>
+                            ${result.errors ? `<p><strong>Errors:</strong> ${JSON.stringify(result.errors)}</p>` : ''}
+                        </div>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Fetch error:', error);
+                resultDiv.innerHTML = `
+                    <div class="status error">
+                        <h3>❌ Network Error</h3>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p>This usually means:</p>
+                        <ul>
+                            <li>Server is not running (check terminal)</li>
+                            <li>Wrong port (server should be on port 5000)</li>
+                            <li>CORS issue (already configured to allow all origins)</li>
+                            <li>Firewall blocking the connection</li>
+                        </ul>
+                        <p><strong>Check console for more details (F12)</strong></p>
+                    </div>
+                `;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Register User';
+            }
+        });
+
+        // Check server status on page load
+        checkServer();
+
+        // Recheck every 5 seconds
+        setInterval(checkServer, 5000);
+    </script>
+</body>
+</html>

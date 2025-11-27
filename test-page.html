@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.4/babel.min.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const Test = () => (
+            <div style={{padding: '40px', fontFamily: 'Arial'}}>
+                <h1 style={{color: 'green'}}>✓ React is Working!</h1>
+                <p>If you see this, React/Babel is functioning correctly.</p>
+            </div>
+        );
+        
+        try {
+            ReactDOM.render(<Test />, document.getElementById('root'));
+            console.log('Test page rendered successfully');
+        } catch (error) {
+            console.error('Error:', error);
+            document.body.innerHTML = '<h1>Error: ' + error.message + '</h1>';
+        }
+    </script>
+</body>
+</html>
