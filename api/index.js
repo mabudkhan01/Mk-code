@@ -18,6 +18,15 @@ const fs = require('fs');
 
 const app = express();
 
+// Global error handlers for unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
 // ===========================================
 // SECURITY MIDDLEWARE
 // ===========================================
@@ -65,21 +74,26 @@ app.use('/api', generalLimiter);
 let isConnected = false;
 
 const connectDB = async () => {
-    if (isConnected) {
-        console.log('Using existing database connection');
+    if (isConnected && mongoose.connection.readyState === 1) {
         return;
     }
     
     try {
+        if (!process.env.MONGO_URI) {
+            throw new Error('MONGO_URI environment variable is not set');
+        }
+
         await mongoose.connect(process.env.MONGO_URI, {
-            serverSelectionTimeoutMS: 5000,
+            serverSelectionTimeoutMS: 10000,
             socketTimeoutMS: 45000,
+            bufferCommands: false,
         });
         isConnected = true;
         console.log('✅ MongoDB Atlas connected successfully');
     } catch (err) {
-        console.error('❌ MongoDB connection error:', err);
-        throw err;
+        console.error('❌ MongoDB connection error:', err.message);
+        isConnected = false;
+        throw new Error('Database connection failed: ' + err.message);
     }
 };
 
@@ -1515,14 +1529,61 @@ app.get('/api/dashboard/stats', authenticateToken, isAdmin, async (req, res) => 
 });
 
 // ===========================================
+// ERROR HANDLING MIDDLEWARE
+// ===========================================
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({ message: 'Route not found' });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error('Express error:', err);
+    
+    if (!res.headersSent) {
+        res.status(err.status || 500).json({
+            error: 'Internal Server Error',
+            message: process.env.NODE_ENV === 'production' 
+                ? 'Something went wrong' 
+                : err.message
+        });
+    }
+});
+
+// ===========================================
 // SERVERLESS EXPORT
 // ===========================================
 
 // Export handler for Vercel serverless
 module.exports = async (req, res) => {
-    // Ensure database connection
-    await connectDB();
-    
-    // Handle the request with Express app
-    return app(req, res);
+    try {
+        // Set headers to prevent caching issues
+        res.setHeader('Cache-Control', 'no-store');
+        
+        // Ensure database connection with timeout
+        const connectionTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database connection timeout')), 8000)
+        );
+        
+        await Promise.race([
+            connectDB(),
+            connectionTimeout
+        ]);
+        
+        // Handle the request with Express app
+        return app(req, res);
+    } catch (error) {
+        console.error('Serverless function error:', error.message);
+        
+        // Return proper error response
+        if (!res.headersSent) {
+            res.status(500).json({ 
+                error: 'Internal Server Error',
+                message: process.env.NODE_ENV === 'production' 
+                    ? 'Service temporarily unavailable' 
+                    : error.message
+            });
+        }
+    }
 };
