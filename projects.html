@@ -20,7 +20,7 @@ const { useState, useEffect } = React;
 
 // --- Header and Footer copied from index.html ---
 // Header
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5000/api' : '/api';
 function saveToken(token) { localStorage.setItem('jwt', token); }
 function getToken() { return localStorage.getItem('jwt'); }
 function removeToken() { localStorage.removeItem('jwt'); }
