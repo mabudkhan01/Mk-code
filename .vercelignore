@@ -1,0 +1,11 @@
+node_modules
+.git
+.env.example
+*.log
+.vscode
+.DS_Store
+start.bat
+START_WEBSITE_HERE.bat
+start.js
+test-*.html
+README.md

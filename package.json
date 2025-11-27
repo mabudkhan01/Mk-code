@@ -8,6 +8,8 @@
     "backend": "node server.js",
     "frontend": "npx http-server -p 3000 -c-1",
     "dev": "nodemon server.js",
+    "build": "echo 'Build completed'",
+    "vercel-build": "echo 'Vercel build completed'",
     "test": "echo \"No tests yet\" && exit 0"
   },
   "keywords": [
