@@ -52,8 +52,8 @@ app.use(cors({
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files (uploads)
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Note: Static file serving disabled in serverless environment
+// Avatars are stored as base64 data URLs in the database
 
 // Rate limiting - General
 const generalLimiter = rateLimit({
@@ -268,22 +268,8 @@ const sendEmail = async (to, templateData) => {
 // ===========================================
 // FILE UPLOAD CONFIGURATION
 // ===========================================
-const uploadDir = path.join(__dirname, '../uploads/avatars');
-
-// Create upload directory if it doesn't exist
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(6).toString('hex');
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
-});
+// Use memory storage for serverless environment (no persistent filesystem)
+const storage = multer.memoryStorage();
 
 const upload = multer({
     storage,
@@ -720,15 +706,11 @@ app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), async
             return res.status(404).json({ message: 'User not found' });
         }
 
-        // Delete old avatar if exists
-        if (user.avatar) {
-            const oldAvatarPath = path.join(__dirname, '../', user.avatar);
-            if (fs.existsSync(oldAvatarPath)) {
-                fs.unlinkSync(oldAvatarPath);
-            }
-        }
-
-        user.avatar = `/uploads/avatars/${req.file.filename}`;
+        // In serverless, store avatar as base64 data URL instead of file path
+        const base64Image = req.file.buffer.toString('base64');
+        const dataUrl = `data:${req.file.mimetype};base64,${base64Image}`;
+        
+        user.avatar = dataUrl;
         await user.save();
 
         res.json({
@@ -736,6 +718,7 @@ app.post('/api/upload-avatar', authenticateToken, upload.single('avatar'), async
             avatar: user.avatar
         });
     } catch (err) {
+        console.error('Avatar upload error:', err);
         res.status(500).json({ message: 'Avatar upload failed' });
     }
 });
