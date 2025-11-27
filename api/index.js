@@ -1548,29 +1548,75 @@ app.use((err, req, res, next) => {
 // SERVERLESS EXPORT
 // ===========================================
 
+// Ensure environment variables are loaded
+if (!process.env.MONGO_URI) {
+    console.error('CRITICAL: MONGO_URI not set');
+}
+if (!process.env.JWT_SECRET) {
+    console.warn('WARNING: JWT_SECRET not set, using fallback');
+    process.env.JWT_SECRET = process.env.JWT_SECRET || 'fallback-jwt-secret-please-change';
+}
+
 // Export handler for Vercel serverless
 module.exports = async (req, res) => {
-    // Prevent double responses
-    if (res.headersSent) return;
-    
     try {
-        // Critical: Connect to database before handling request
-        if (!isConnected || mongoose.connection.readyState !== 1) {
-            await connectDB().catch(err => {
-                console.error('DB connection failed:', err.message);
-                throw new Error('Database unavailable');
+        // Set CORS headers explicitly
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+        res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+        
+        // Handle OPTIONS requests
+        if (req.method === 'OPTIONS') {
+            return res.status(200).end();
+        }
+        
+        // Check critical environment variables
+        if (!process.env.MONGO_URI) {
+            console.error('CRITICAL: MONGO_URI not configured');
+            return res.status(503).json({ 
+                error: 'Configuration Error',
+                message: 'Database connection not configured',
+                timestamp: new Date().toISOString()
             });
         }
         
-        // Handle the request with Express app
-        app(req, res);
-    } catch (error) {
-        console.error('Handler error:', error);
+        // Connect to database with retry logic
+        let connectionAttempts = 0;
+        const maxAttempts = 3;
         
+        while ((!isConnected || mongoose.connection.readyState !== 1) && connectionAttempts < maxAttempts) {
+            try {
+                connectionAttempts++;
+                console.log(`Database connection attempt ${connectionAttempts}/${maxAttempts}`);
+                await connectDB();
+                break;
+            } catch (err) {
+                console.error(`Connection attempt ${connectionAttempts} failed:`, err.message);
+                if (connectionAttempts >= maxAttempts) {
+                    return res.status(503).json({ 
+                        error: 'Database Unavailable',
+                        message: 'Failed to connect to database after multiple attempts',
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                // Wait before retry
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+        
+        // Handle the request with Express app
+        return app(req, res);
+        
+    } catch (error) {
+        console.error('Handler fatal error:', error);
+        
+        // Make sure we haven't already sent a response
         if (!res.headersSent) {
-            res.status(500).json({ 
-                error: 'Service Error',
-                message: error.message || 'Internal server error'
+            return res.status(500).json({ 
+                error: 'Internal Server Error',
+                message: process.env.NODE_ENV === 'production' ? 'Service temporarily unavailable' : error.message,
+                timestamp: new Date().toISOString()
             });
         }
     }
