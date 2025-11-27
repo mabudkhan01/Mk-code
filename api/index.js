@@ -1,5 +1,15 @@
 // Serverless function wrapper for Vercel
 require('dotenv').config();
+
+// Validate critical environment variables
+if (!process.env.MONGO_URI) {
+    console.error('FATAL: MONGO_URI is not set');
+}
+if (!process.env.JWT_SECRET) {
+    console.error('WARNING: JWT_SECRET is not set, using fallback');
+    process.env.JWT_SECRET = 'fallback-secret-change-in-production';
+}
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -1557,32 +1567,27 @@ app.use((err, req, res, next) => {
 
 // Export handler for Vercel serverless
 module.exports = async (req, res) => {
+    // Prevent double responses
+    if (res.headersSent) return;
+    
     try {
-        // Set headers to prevent caching issues
-        res.setHeader('Cache-Control', 'no-store');
-        
-        // Ensure database connection with timeout
-        const connectionTimeout = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Database connection timeout')), 8000)
-        );
-        
-        await Promise.race([
-            connectDB(),
-            connectionTimeout
-        ]);
+        // Critical: Connect to database before handling request
+        if (!isConnected || mongoose.connection.readyState !== 1) {
+            await connectDB().catch(err => {
+                console.error('DB connection failed:', err.message);
+                throw new Error('Database unavailable');
+            });
+        }
         
         // Handle the request with Express app
-        return app(req, res);
+        app(req, res);
     } catch (error) {
-        console.error('Serverless function error:', error.message);
+        console.error('Handler error:', error);
         
-        // Return proper error response
         if (!res.headersSent) {
             res.status(500).json({ 
-                error: 'Internal Server Error',
-                message: process.env.NODE_ENV === 'production' 
-                    ? 'Service temporarily unavailable' 
-                    : error.message
+                error: 'Service Error',
+                message: error.message || 'Internal server error'
             });
         }
     }
