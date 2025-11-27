@@ -1518,5 +1518,11 @@ app.get('/api/dashboard/stats', authenticateToken, isAdmin, async (req, res) => 
 // SERVERLESS EXPORT
 // ===========================================
 
-// Export the Express app for Vercel serverless
-module.exports = app;
+// Export handler for Vercel serverless
+module.exports = async (req, res) => {
+    // Ensure database connection
+    await connectDB();
+    
+    // Handle the request with Express app
+    return app(req, res);
+};
