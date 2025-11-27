@@ -7,7 +7,7 @@ const bodyParser = require('body-parser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { Parser } = require('json2csv');
+const { Parser } = require('@json2csv/plainjs');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
@@ -990,10 +990,10 @@ app.get('/api/newsletter', authenticateToken, isAdmin, async (req, res) => {
 app.get('/api/newsletter/export', authenticateToken, isAdmin, async (req, res) => {
     try {
         await connectDB();
-        const subscribers = await Newsletter.find({ status: 'active' });
+        const subscribers = await Newsletter.find({ status: 'active' }).lean();
         const fields = ['email', 'subscribedAt', 'status'];
-        const json2csvParser = new Parser({ fields });
-        const csv = json2csvParser.parse(subscribers);
+        const parser = new Parser({ fields });
+        const csv = parser.parse(subscribers);
 
         res.header('Content-Type', 'text/csv');
         res.header('Content-Disposition', 'attachment; filename=newsletter-subscribers.csv');
